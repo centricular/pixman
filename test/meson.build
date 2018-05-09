@@ -54,5 +54,5 @@ foreach fname : tests
     link_with: [libpixman, libtestutils]
   )
 
-  test(test_name, exe)
+  test(test_name, exe, timeout: 3 * 60)
 endforeach

@@ -86,7 +86,8 @@ libpixman = library('pixman', pixman_sources,
   c_args: c_args,
   include_directories: incbase + incpixman,
   link_with: simdlibs,
-  dependencies: deps)
+  dependencies: deps,
+  vs_module_defs: 'pixman.def')
 
 pixman_dep = declare_dependency(link_with: libpixman,
   include_directories : incpixman,

@@ -13,10 +13,13 @@ check_sizeofs = [
 ]
 
 check_optional_deps = [
-  ['openmp', {'conf-prefix': 'use'}],
   ['gtk', {'pkg': 'gtk+-2.0', 'version': '>= 2.16'}],
   ['libpng'],
 ]
+
+if cc.get_id() != 'msvc'
+  check_optional_deps += [['openmp', {'conf-prefix': 'use'}]]
+endif
 
 check_funcs = [
   ['getisax'],
@@ -57,13 +60,19 @@ check_compiles = [
   ['USE_SSE2', files('meson-cc-tests/sse2-test.c'), {'c_args': sse2_cflags}],
   ['USE_SSSE3', files('meson-cc-tests/ssse3-test.c'), {'c_args': ssse3_cflags}],
   ['USE_VMX', files('meson-cc-tests/vmx-test.c'), {'c_args': vmx_cflags}],
-  ['USE_ARM_SIMD', files('meson-cc-tests/arm-simd-test.S'), {'c_args': arm_simd_cflags}],
-  ['USE_ARM_NEON', files('meson-cc-tests/arm-neon-test.S'), {'c_args': arm_neon_cflags}],
   ['USE_ARM_IWMMXT', files('meson-cc-tests/arm-iwmmxt-test.c'), {'c_args': arm_iwmmxt_cflags}],
   ['USE_MIPS_DSPR2', files('meson-cc-tests/mips-dspr2-test.c'), {'c_args': mips_dspr2_cflags}],
   ['USE_LOONGSON_MMI', files('meson-cc-tests/loongson-mmi-test.c'), {'c_args': loongson_mmi_cflags + ['-I' + meson.current_source_dir()]}],
   ['USE_GCC_INLINE_ASM', files('meson-cc-tests/gcc-inline-asm-test.c')],
 ]
+
+# FIXME: for some reason meson thinks msvc can compile arm objects
+if cc.get_id() != 'msvc'
+  check_compiles += [
+    ['USE_ARM_SIMD', files('meson-cc-tests/arm-simd-test.S'), {'c_args': arm_simd_cflags}],
+    ['USE_ARM_NEON', files('meson-cc-tests/arm-neon-test.S'), {'c_args': arm_neon_cflags}],
+  ]
+endif
 
 check_links = [
   ['TOOLCHAIN_SUPPORTS_ATTRIBUTE_CONSTRUCTOR', files('meson-cc-tests/attribute-constructor-test.c')],
@@ -144,7 +153,7 @@ foreach check : check_funcs
     found = true
 
     foreach link_with : link_withs
-      dep = cc.find_library(link_with)
+      dep = cc.find_library(link_with, required: false)
       if dep.found()
 	extra_deps += dep
       else
