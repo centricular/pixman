@@ -6,6 +6,8 @@ project('pixman', 'c',
 
 pkgmod = import('pkgconfig')
 
+cc = meson.get_compiler('c')
+
 check_sizeofs = [
   ['long'],
 ]
@@ -40,47 +42,35 @@ check_header_symbols = [
   ['FE_DIVBYZERO', 'fenv.h'],
 ]
 
-check_compiles = []
+mmx_cflags = cc.get_id() == 'sun' ? ['-xarch=sse'] : ['-mmmx', '-Winline']
+sse2_cflags = cc.get_id() == 'sun' ? ['-xarch=sse2'] : ['-msse2', '-Winline']
+ssse3_cflags = ['-mssse3', '-Winline']
+vmx_cflags = ['-maltivec', '-mabi=altivec'] # FIXME grep Apple ?
+arm_simd_cflags = ['-x assembler-with-cpp']
+arm_neon_cflags = ['-x assembler-with-cpp']
+arm_iwmmxt_cflags = ['-flax-vector-conversions', '-Winline', '-march=iwmmxt']
+mips_dspr2_cflags = ['-mdspr2']
+loongson_mmi_cflags = ['-march=loongson2f']
 
-check_compiles += [['USE_GCC_INLINE_ASM',
-'''
-int main () {
-  asm volatile ( "\tnop\n" : : : "cc", "memory" );
-  return 0;
-}
-''']]
+check_compiles = [
+  ['USE_X86_MMX', files('meson-cc-tests/mmx-test.c'), {'c_args': mmx_cflags}],
+  ['USE_SSE2', files('meson-cc-tests/sse2-test.c'), {'c_args': sse2_cflags}],
+  ['USE_SSSE3', files('meson-cc-tests/ssse3-test.c'), {'c_args': ssse3_cflags}],
+  ['USE_VMX', files('meson-cc-tests/vmx-test.c'), {'c_args': vmx_cflags}],
+  ['USE_ARM_SIMD', files('meson-cc-tests/arm-simd-test.S'), {'c_args': arm_simd_cflags}],
+  ['USE_ARM_NEON', files('meson-cc-tests/arm-neon-test.S'), {'c_args': arm_neon_cflags}],
+  ['USE_ARM_IWMMXT', files('meson-cc-tests/arm-iwmmxt-test.c'), {'c_args': arm_iwmmxt_cflags}],
+  ['USE_MIPS_DSPR2', files('meson-cc-tests/mips-dspr2-test.c'), {'c_args': mips_dspr2_cflags}],
+  ['USE_LOONGSON_MMI', files('meson-cc-tests/loongson-mmi-test.c'), {'c_args': loongson_mmi_cflags + ['-I' + meson.current_source_dir()]}],
+  ['USE_GCC_INLINE_ASM', files('meson-cc-tests/gcc-inline-asm-test.c')],
+]
 
-check_links = []
-
-check_links += [['TOOLCHAIN_SUPPORTS_ATTRIBUTE_CONSTRUCTOR',
-'''
-#if defined(__GNUC__) && (__GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 7))
-/* attribute 'constructor' is supported since gcc 2.7, but some compilers
- * may only pretend to be gcc, so let's try to actually use it
- */
-static int x = 1;
-static void __attribute__((constructor)) constructor_function () { x = 0; }
-int main (void) { return x; }
-#else
-#error not gcc or gcc version is older than 2.7
-#endif
-''']]
-
-check_links += [['HAVE_FLOAT128',
-'''
-__float128 a = 1.0Q, b = 2.0Q; int main (void) { return a + b; }
-''']]
-
-check_links += [['HAVE_BUILTIN_CLZ',
-'''
-unsigned int x = 11; int main (void) { return __builtin_clz(x); }
-''']]
-
-check_links += [['HAVE_GCC_VECTOR_EXTENSIONS',
-'''
-unsigned int __attribute__ ((vector_size(16))) e, a, b;
-int main (void) { e = a - ((b << 27) + (b >> (32 - 27))) + 1; return e[0]; }
-''']]
+check_links = [
+  ['TOOLCHAIN_SUPPORTS_ATTRIBUTE_CONSTRUCTOR', files('meson-cc-tests/attribute-constructor-test.c')],
+  ['HAVE_FLOAT128', files('meson-cc-tests/float128-test.c')],
+  ['HAVE_BUILTIN_CLZ', files('meson-cc-tests/builtin-clz-test.c')],
+  ['HAVE_GCC_VECTOR_EXTENSIONS', files('meson-cc-tests/gcc-vector-extensions.c')],
+]
 
 check_thread_flags = [
   [['-pthread'], ['-pthread']],
@@ -89,8 +79,6 @@ check_thread_flags = [
 ]
 
 check_tls_keywords = ['__thread', '__declspec(thread)']
-
-cc = meson.get_compiler('c')
 
 pixman_version = meson.project_version()
 version_arr = pixman_version.split('.')
@@ -148,17 +136,25 @@ foreach check : check_funcs
   extra_deps = []
   found = true
 
-  foreach link_with : link_withs
-    dep = cc.find_library(link_with)
-    if dep.found()
-      extra_deps += dep
-    else
-      found = false
-    endif
-  endforeach
+  # First try without linking
 
-  if found
-    found = cc.has_function(name, dependencies: extra_deps)
+  found = cc.has_function(name)
+
+  if not found and link_withs.length() > 0
+    found = true
+
+    foreach link_with : link_withs
+      dep = cc.find_library(link_with)
+      if dep.found()
+	extra_deps += dep
+      else
+	found = false
+      endif
+    endforeach
+
+    if found
+      found = cc.has_function(name, dependencies: extra_deps)
+    endif
   endif
 
   if found
@@ -187,8 +183,10 @@ endforeach
 foreach check : check_compiles
   name = check[0]
   prog = check[1]
+  opts = check.length() > 2 ? check[2] : {}
+  cflags = opts.get('c_args', [])
 
-  if cc.compiles(prog, name: name)
+  if cc.compiles(prog, name: name, args: cflags)
     conf.set(name.to_upper(), 1)
   endif
 endforeach
@@ -206,7 +204,7 @@ foreach thread_flags : check_thread_flags
   if not conf.has('HAVE_PTHREADS')
     cflags = thread_flags[0]
     lflags = thread_flags[1]
-    if cc.links(files('thread-test.c'), args: cflags + lflags, name: 'pthreads')
+    if cc.links(files('meson-cc-tests/thread-test.c'), args: cflags + lflags, name: 'pthreads')
       conf.set('HAVE_PTHREADS', 1)
       c_args += cflags
       lflags += lflags

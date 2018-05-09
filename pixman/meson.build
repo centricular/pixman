@@ -1,6 +1,4 @@
-simd_mod = import('unstable-simd')
-
-sources = [
+pixman_sources = [
   'pixman.c',
   'pixman-access.c',
   'pixman-access-accessors.c',
@@ -54,35 +52,37 @@ configure_file(
   configuration: verconf
 )
 
-# TODO: add support for other architectures SIMDs in meson
+simd_sources = [
+  ['USE_X86_MMX', ['pixman-mmx.c'], mmx_cflags],
+  ['USE_VMX', ['pixman-vmx.c'], vmx_cflags],
+  ['USE_SSE2', ['pixman-sse2.c'], sse2_cflags],
+  ['USE_SSSE3', ['pixman-ssse3.c'], ssse3_cflags],
+  ['USE_ARM_SIMD', ['pixman-arm-simd.c', 'pixman-arm-simd-asm.S', 'pixman-arm-simd-asm-scaled.S'], []],
+  ['USE_ARM_NEON', ['pixman-arm-neon.c', 'pixman-arm-neon-asm.S', 'pixman-arm-neon-asm-bilinear.S'], []],
+  ['USE_ARM_IWMMXT', ['pixman-mmx.c'], []],
+  ['USE_MIPS_DSPR2', ['pixman-mips-dspr2.c', 'pixman-mips-dspr2-asm.S', 'pixman-mips-memcpy-asm.S'], []],
+  ['USE_LOONGSON_MMI', ['pixman-mmx.c'], loongson_mmi_cflags],
+]
 
-ret = simd_mod.check('pixman-simds',
-  mmx: 'pixman-mmx.c',
-  sse2: 'pixman-sse2.c',
-  ssse3: 'pixman-ssse3.c',
-  compiler: cc,
-  include_directories: incbase,
-  c_args: c_args,
-)
+simdlibs = []
 
-simdlibs = ret[0]
-simdconf = ret[1]
+foreach simd : simd_sources
+  conf_flag = simd[0]
+  sources = simd[1]
+  cflags = simd[2]
 
-if simdconf.get('HAVE_MMX') == '1'
-  conf.set('USE_X86_MMX', 1)
-endif
-
-if simdconf.get('HAVE_SSE2') == '1'
-  conf.set('USE_SSE2', 1)
-endif
-
-if simdconf.get('HAVE_SSSE3') == '1'
-  conf.set('USE_SSSE3', 1)
-endif
+  if conf.has(conf_flag)
+    simdlibs += [static_library('simd_@0@'.format(conf_flag), sources,
+      c_args: cflags + c_args,
+      include_directories: incbase,
+      dependencies: deps,
+    )]
+  endif
+endforeach
 
 incpixman = [include_directories('.')]
 
-libpixman = library('pixman', sources,
+libpixman = library('pixman', pixman_sources,
   c_args: c_args,
   include_directories: incbase + incpixman,
   link_with: simdlibs,
