@@ -46,7 +46,7 @@ verconf.set('PIXMAN_VERSION_MAJOR', pixman_version_major)
 verconf.set('PIXMAN_VERSION_MINOR', pixman_version_minor)
 verconf.set('PIXMAN_VERSION_MICRO', pixman_version_micro)
 
-configure_file(
+pixman_version_h = configure_file(
   input: 'pixman-version.h.in',
   output: 'pixman-version.h',
   configuration: verconf
@@ -82,12 +82,17 @@ endforeach
 
 incpixman = [include_directories('.')]
 
-libpixman = library('pixman', pixman_sources,
+libpixman = library('pixman-1', pixman_sources,
   c_args: c_args,
   include_directories: incbase + incpixman,
   link_with: simdlibs,
   dependencies: deps,
+  install: true,
+  soversion: 0,
+  version: meson.project_version(),
   vs_module_defs: 'pixman.def')
+
+install_headers(['pixman.h', pixman_version_h], subdir: 'pixman-1')
 
 pixman_dep = declare_dependency(link_with: libpixman,
   include_directories : incpixman,
