@@ -255,4 +255,5 @@ configure_file(output: 'config.h', configuration: conf)
 
 pkgmod.generate(libpixman,
   description: 'The pixman library (version 1)',
+  subdirs: ['pixman-1'],
   version: pixman_version)
