@@ -1,6 +1,6 @@
 project('pixman', 'c',
   version : '0.35.1',
-  meson_version : '>= 0.46',
+  meson_version : '>= 0.47.0',
   default_options: [ 'buildtype=debugoptimized'],
 )
 
@@ -121,12 +121,12 @@ foreach check : check_sizeofs
 endforeach
 
 foreach check : check_optional_deps
-  name = check[0]
-  opts = check.length() > 1 ? check[1] : {}
+  name = check.get(0)
+  opts = check.get(1, {})
   pkg_name = opts.get('pkg', name)
   conf_prefix = opts.get('conf-prefix', 'have')
 
-  if opts.contains('version')
+  if opts.has_key('version')
     dep = dependency(pkg_name, version : opts['version'], required : false)
   else
     dep = dependency(pkg_name, required : false)
@@ -139,8 +139,8 @@ foreach check : check_optional_deps
 endforeach
 
 foreach check : check_funcs
-  name = check[0]
-  opts = check.length() > 1 ? check[1] : {}
+  name = check.get(0)
+  opts = check.get(1, {})
   link_withs = opts.get('link_with', [])
   extra_deps = []
   found = true
@@ -190,9 +190,9 @@ foreach check : check_header_symbols
 endforeach
 
 foreach check : check_compiles
-  name = check[0]
-  prog = check[1]
-  opts = check.length() > 2 ? check[2] : {}
+  name = check.get(0)
+  prog = check.get(1)
+  opts = check.get(2, {})
   cflags = opts.get('c_args', [])
 
   if cc.compiles(prog, name: name, args: cflags)
