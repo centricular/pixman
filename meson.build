@@ -13,8 +13,8 @@ check_sizeofs = [
 ]
 
 check_optional_deps = [
-  ['gtk', {'pkg': 'gtk+-2.0', 'version': '>= 2.16'}],
-  ['libpng'],
+  ['gtk', {'pkg': 'gtk+-2.0', 'version': '>= 2.16', 'option': 'gtk2'}],
+  ['libpng', {'fallback': ['libpng', 'libpng_dep'], 'option': 'png'}],
 ]
 
 if cc.get_id() != 'msvc'
@@ -125,11 +125,18 @@ foreach check : check_optional_deps
   opts = check.get(1, {})
   pkg_name = opts.get('pkg', name)
   conf_prefix = opts.get('conf-prefix', 'have')
+  if opts.has_key('option')
+    req = get_option(opts['option'])
+  else
+    req = false
+  endif
 
   if opts.has_key('version')
-    dep = dependency(pkg_name, version : opts['version'], required : false)
+    dep = dependency(pkg_name, version : opts['version'], required : req)
+  elif opts.has_key('fallback')
+    dep = dependency(pkg_name, fallback : opts['fallback'], required : req)
   else
-    dep = dependency(pkg_name, required : false)
+    dep = dependency(pkg_name, required : req)
   endif
 
   if dep.found()
@@ -155,9 +162,9 @@ foreach check : check_funcs
     foreach link_with : link_withs
       dep = cc.find_library(link_with, required: false)
       if dep.found()
-	extra_deps += dep
+        extra_deps += dep
       else
-	found = false
+        found = false
       endif
     endforeach
 

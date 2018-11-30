@@ -1,0 +1,2 @@
+option('gtk2', type : 'feature', value : 'disabled')
+option('png', type : 'feature', value : 'auto')
