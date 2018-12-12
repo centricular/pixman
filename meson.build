@@ -8,6 +8,8 @@ pkgmod = import('pkgconfig')
 
 cc = meson.get_compiler('c')
 
+conf = configuration_data()
+
 check_sizeofs = [
   ['long'],
 ]
@@ -45,9 +47,20 @@ check_header_symbols = [
   ['FE_DIVBYZERO', 'fenv.h'],
 ]
 
-mmx_cflags = cc.get_id() == 'sun' ? ['-xarch=sse'] : ['-mmmx', '-Winline']
-sse2_cflags = cc.get_id() == 'sun' ? ['-xarch=sse2'] : ['-msse2', '-Winline']
-ssse3_cflags = ['-mssse3', '-Winline']
+if cc.get_id() == 'sun'
+  mmx_cflags = ['-xarch=sse']
+  sse2_cflags = ['-xarch=sse2']
+  ssse3_cflags = ['-mssse3', '-Winline']
+elif cc.get_id() == 'msvc'
+  mmx_cflags = ['/w14710', '/w14714', '/wd4244']
+  mmx_cflags = []
+  sse2_cflags = []
+  ssse3_cflags = []
+else
+  mmx_cflags = ['-mmmx', '-Winline']
+  sse2_cflags = ['-msse2', '-Winline']
+  ssse3_cflags = ['-mssse3', '-Winline']
+endif
 vmx_cflags = ['-maltivec', '-mabi=altivec'] # FIXME grep Apple ?
 arm_simd_cflags = ['-x assembler-with-cpp']
 arm_neon_cflags = ['-x assembler-with-cpp']
@@ -55,20 +68,30 @@ arm_iwmmxt_cflags = ['-flax-vector-conversions', '-Winline', '-march=iwmmxt']
 mips_dspr2_cflags = ['-mdspr2']
 loongson_mmi_cflags = ['-march=loongson2f']
 
-check_compiles = [
-  ['USE_X86_MMX', files('meson-cc-tests/mmx-test.c'), {'c_args': mmx_cflags}],
-  ['USE_SSE2', files('meson-cc-tests/sse2-test.c'), {'c_args': sse2_cflags}],
-  ['USE_SSSE3', files('meson-cc-tests/ssse3-test.c'), {'c_args': ssse3_cflags}],
-  ['USE_VMX', files('meson-cc-tests/vmx-test.c'), {'c_args': vmx_cflags}],
-  ['USE_ARM_IWMMXT', files('meson-cc-tests/arm-iwmmxt-test.c'), {'c_args': arm_iwmmxt_cflags}],
-  ['USE_MIPS_DSPR2', files('meson-cc-tests/mips-dspr2-test.c'), {'c_args': mips_dspr2_cflags}],
-  ['USE_LOONGSON_MMI', files('meson-cc-tests/loongson-mmi-test.c'), {'c_args': loongson_mmi_cflags + ['-I' + meson.current_source_dir()]}],
-  ['USE_GCC_INLINE_ASM', files('meson-cc-tests/gcc-inline-asm-test.c')],
-]
+check_compiles = []
 
-# FIXME: for some reason meson thinks msvc can compile arm objects
-if cc.get_id() != 'msvc'
+if cc.get_id() == 'msvc'
+  if host_machine.cpu_family() == 'x86'
+    conf.set('USE_X86_MMX', 1)
+    conf.set('USE_SSE2', 1)
+    conf.set('USE_SSSE3', 1)
+    message('Enabling MMX, SSE2, SSSE3')
+  elif host_machine.cpu_family() == 'x86_64'
+    conf.set('USE_SSE2', 1)
+    conf.set('USE_SSSE3', 1)
+    message('Enabling SSE2, SSSE3')
+  endif
+else
+  # None of these compiler checks work on MSVC
   check_compiles += [
+    ['USE_X86_MMX', files('meson-cc-tests/mmx-test.c'), {'c_args': mmx_cflags}],
+    ['USE_SSE2', files('meson-cc-tests/sse2-test.c'), {'c_args': sse2_cflags}],
+    ['USE_SSSE3', files('meson-cc-tests/ssse3-test.c'), {'c_args': ssse3_cflags}],
+    ['USE_VMX', files('meson-cc-tests/vmx-test.c'), {'c_args': vmx_cflags}],
+    ['USE_ARM_IWMMXT', files('meson-cc-tests/arm-iwmmxt-test.c'), {'c_args': arm_iwmmxt_cflags}],
+    ['USE_MIPS_DSPR2', files('meson-cc-tests/mips-dspr2-test.c'), {'c_args': mips_dspr2_cflags}],
+    ['USE_LOONGSON_MMI', files('meson-cc-tests/loongson-mmi-test.c'), {'c_args': loongson_mmi_cflags + ['-I' + meson.current_source_dir()]}],
+    ['USE_GCC_INLINE_ASM', files('meson-cc-tests/gcc-inline-asm-test.c')],
     ['USE_ARM_SIMD', files('meson-cc-tests/arm-simd-test.S'), {'c_args': arm_simd_cflags}],
     ['USE_ARM_NEON', files('meson-cc-tests/arm-neon-test.S'), {'c_args': arm_neon_cflags}],
   ]
@@ -94,8 +117,6 @@ version_arr = pixman_version.split('.')
 pixman_version_major = version_arr[0].to_int()
 pixman_version_minor = version_arr[1].to_int()
 pixman_version_micro = version_arr[2].to_int()
-
-conf = configuration_data()
 
 deps = []
 
