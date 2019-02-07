@@ -25,7 +25,7 @@ endif
 
 check_funcs = [
   ['getisax'],
-  ['posix_memalign'],
+  ['posix_memalign', {'prefix': '#include <stdlib.h>'}],
   ['sigaction'],
   ['alarm'],
   ['mmap'],
@@ -170,12 +170,13 @@ foreach check : check_funcs
   name = check.get(0)
   opts = check.get(1, {})
   link_withs = opts.get('link_with', [])
+  func_prefix = opts.get('prefix', '')
   extra_deps = []
   found = true
 
   # First try without linking
 
-  found = cc.has_function(name)
+  found = cc.has_function(name, prefix: func_prefix)
 
   if not found and link_withs.length() > 0
     found = true
